@@ -514,6 +514,8 @@ impl eframe::App for ReportApp {
                                 ui.label(format!("ASIN: {}", p.asin));
                                 ui.label("Name:");
                                 ui.label(&p.name);
+                                let url = format!("https://www.amazon.com/gp/product/{}", p.asin);
+                                ui.hyperlink(&url);
                                 ui.label(format!("Commission: ${:.2}", p.total_ad_fee));
                             } else {
                                 ui.label("No products found");
@@ -530,6 +532,8 @@ impl eframe::App for ReportApp {
                                 ui.label(format!("ASIN: {}", p.asin));
                                 ui.label("Name:");
                                 ui.label(&p.name);
+                                let url = format!("https://www.amazon.com/gp/product/{}", p.asin);
+                                ui.hyperlink(&url);
                                 ui.label(format!("Revenue: ${:.2}", p.total_revenue));
                             } else {
                                 ui.label("No products found");
@@ -758,7 +762,56 @@ impl eframe::App for ReportApp {
                             }
 
                             ui.group(|ui| {
-                                ui.strong(format!("Tracking ID: {}", tracking_id));
+                                ui.horizontal(|ui| {
+                                    ui.strong(format!("Tracking ID: {}", tracking_id));
+
+                                    if ui.button("📋 Copy").clicked() {
+                                        let mut copy_text = format!("Tracking ID: {}\n\n", tracking_id);
+
+                                        // Add category info
+                                        if let Some((_, cat_opt)) = results.best_category_by_ad_fee.iter()
+                                            .find(|(id, _)| id == tracking_id)
+                                        {
+                                            if let Some(cat) = cat_opt {
+                                                copy_text.push_str(&format!("Best Category by Commission: {} (${:.2})\n", cat.category, cat.total_ad_fee));
+                                            }
+                                        }
+                                        if let Some((_, cat_opt)) = results.best_category_by_revenue.iter()
+                                            .find(|(id, _)| id == tracking_id)
+                                        {
+                                            if let Some(cat) = cat_opt {
+                                                copy_text.push_str(&format!("Best Category by Revenue: {} (${:.2})\n", cat.category, cat.total_revenue));
+                                            }
+                                        }
+                                        copy_text.push_str("\n");
+
+                                        // Add top products by commission
+                                        copy_text.push_str(&format!("Top {} by Commission:\n", top_n));
+                                        if let Some(products) = results.by_tracking_id_ad_fee.iter()
+                                            .find(|(id, _)| id == tracking_id)
+                                            .map(|(_, prods)| prods)
+                                        {
+                                            for (i, p) in products.iter().enumerate() {
+                                                copy_text.push_str(&format!("{}. {}\n   {}\n   https://www.amazon.com/gp/product/{}\n   Commission: ${:.2}\n\n",
+                                                    i + 1, p.asin, p.name, p.asin, p.total_ad_fee));
+                                            }
+                                        }
+
+                                        // Add top products by revenue
+                                        copy_text.push_str(&format!("Top {} by Revenue:\n", top_n));
+                                        if let Some(products) = results.by_tracking_id_revenue.iter()
+                                            .find(|(id, _)| id == tracking_id)
+                                            .map(|(_, prods)| prods)
+                                        {
+                                            for (i, p) in products.iter().enumerate() {
+                                                copy_text.push_str(&format!("{}. {}\n   {}\n   https://www.amazon.com/gp/product/{}\n   Revenue: ${:.2}\n\n",
+                                                    i + 1, p.asin, p.name, p.asin, p.total_revenue));
+                                            }
+                                        }
+
+                                        ui.ctx().copy_text(copy_text);
+                                    }
+                                });
                                 ui.add_space(3.0);
 
                                 // Display best performing categories
@@ -804,6 +857,11 @@ impl eframe::App for ReportApp {
                                             for (i, p) in products.iter().enumerate() {
                                                 ui.label(format!("{}. {}", i + 1, p.asin));
                                                 ui.label(format!("   {}", p.name));
+                                                let url = format!("https://www.amazon.com/gp/product/{}", p.asin);
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.hyperlink(&url);
+                                                });
                                                 ui.label(format!("   Commission: ${:.2}", p.total_ad_fee));
                                                 if i < products.len() - 1 {
                                                     ui.add_space(2.0);
@@ -826,6 +884,11 @@ impl eframe::App for ReportApp {
                                             for (i, p) in products.iter().enumerate() {
                                                 ui.label(format!("{}. {}", i + 1, p.asin));
                                                 ui.label(format!("   {}", p.name));
+                                                let url = format!("https://www.amazon.com/gp/product/{}", p.asin);
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.hyperlink(&url);
+                                                });
                                                 ui.label(format!("   Rev: ${:.2}", p.total_revenue));
                                                 if i < products.len() - 1 {
                                                     ui.add_space(2.0);
@@ -855,7 +918,39 @@ impl eframe::App for ReportApp {
                                 let grouped_results = aggregate_tracking_ids(&group.tracking_ids, results);
 
                                 ui.group(|ui| {
-                                    ui.strong(format!("Group: {}", group.name));
+                                    ui.horizontal(|ui| {
+                                        ui.strong(format!("Group: {}", group.name));
+
+                                        if ui.button("📋 Copy").clicked() {
+                                            let mut copy_text = format!("Group: {}\n", group.name);
+                                            copy_text.push_str(&format!("Tracking IDs: {}\n\n", group.tracking_ids.iter().cloned().collect::<Vec<_>>().join(", ")));
+
+                                            // Add category info
+                                            if let Some(cat) = &grouped_results.best_category_by_ad_fee {
+                                                copy_text.push_str(&format!("Best Category by Commission: {} (${:.2})\n", cat.category, cat.total_ad_fee));
+                                            }
+                                            if let Some(cat) = &grouped_results.best_category_by_revenue {
+                                                copy_text.push_str(&format!("Best Category by Revenue: {} (${:.2})\n", cat.category, cat.total_revenue));
+                                            }
+                                            copy_text.push_str("\n");
+
+                                            // Add top products by commission
+                                            copy_text.push_str(&format!("Top {} by Commission:\n", top_n));
+                                            for (i, p) in grouped_results.top_products_by_ad_fee.iter().enumerate() {
+                                                copy_text.push_str(&format!("{}. {}\n   {}\n   https://www.amazon.com/gp/product/{}\n   Commission: ${:.2}\n\n",
+                                                    i + 1, p.asin, p.name, p.asin, p.total_ad_fee));
+                                            }
+
+                                            // Add top products by revenue
+                                            copy_text.push_str(&format!("Top {} by Revenue:\n", top_n));
+                                            for (i, p) in grouped_results.top_products_by_revenue.iter().enumerate() {
+                                                copy_text.push_str(&format!("{}. {}\n   {}\n   https://www.amazon.com/gp/product/{}\n   Revenue: ${:.2}\n\n",
+                                                    i + 1, p.asin, p.name, p.asin, p.total_revenue));
+                                            }
+
+                                            ui.ctx().copy_text(copy_text);
+                                        }
+                                    });
                                     ui.label(format!("Tracking IDs: {}", group.tracking_ids.iter().cloned().collect::<Vec<_>>().join(", ")));
                                     ui.add_space(3.0);
 
@@ -890,6 +985,11 @@ impl eframe::App for ReportApp {
                                             for (i, p) in grouped_results.top_products_by_ad_fee.iter().enumerate() {
                                                 ui.label(format!("{}. {}", i + 1, p.asin));
                                                 ui.label(format!("   {}", p.name));
+                                                let url = format!("https://www.amazon.com/gp/product/{}", p.asin);
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.hyperlink(&url);
+                                                });
                                                 ui.label(format!("   Commission: ${:.2}", p.total_ad_fee));
                                                 if i < grouped_results.top_products_by_ad_fee.len() - 1 {
                                                     ui.add_space(2.0);
@@ -907,6 +1007,11 @@ impl eframe::App for ReportApp {
                                             for (i, p) in grouped_results.top_products_by_revenue.iter().enumerate() {
                                                 ui.label(format!("{}. {}", i + 1, p.asin));
                                                 ui.label(format!("   {}", p.name));
+                                                let url = format!("https://www.amazon.com/gp/product/{}", p.asin);
+                                                ui.horizontal(|ui| {
+                                                    ui.label("   ");
+                                                    ui.hyperlink(&url);
+                                                });
                                                 ui.label(format!("   Rev: ${:.2}", p.total_revenue));
                                                 if i < grouped_results.top_products_by_revenue.len() - 1 {
                                                     ui.add_space(2.0);
